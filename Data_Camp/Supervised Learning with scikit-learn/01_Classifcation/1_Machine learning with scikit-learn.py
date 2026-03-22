@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 
 #file read
-df=pd.read_csv("Supervised Learning with scikit-learn/Data_set/telecom_churn_clean.csv")
+df=pd.read_csv("/Users/piyushmaji/Desktop/Python/ML/Data_Camp/Supervised Learning with scikit-learn/Data_set/telecom_churn_clean.csv")
 
 #plot
 plt.figure(figsize=(12, 8))
