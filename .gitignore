@@ -1,0 +1,41 @@
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE / Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Byte-compiled / optimized
+*.pyc
+*.pyo
+
+# OS generated
+Thumbs.db
+ehthumbs.db
+Desktop.ini
