@@ -19,6 +19,7 @@ Run:  python decision_boundary_viz.py
 =============================================================================
 """
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
@@ -92,6 +93,8 @@ def plot_decision_boundary(ax, clf, X, y, title, resolution=300):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_visualization():
+    os.makedirs("plots", exist_ok=True)
+
     # ── Prepare 3 datasets ───────────────────────────────────────────────
     iris = load_iris()
     X_iris = iris.data[:, :2]  # Only first 2 features for 2D plotting
@@ -136,7 +139,7 @@ def run_visualization():
         )
 
     fig1.tight_layout(rect=[0, 0, 1, 0.95])
-    fig1.savefig("fig1_ours_vs_sklearn.png", dpi=150, bbox_inches='tight')
+    fig1.savefig("plots/fig1_ours_vs_sklearn.png", dpi=150, bbox_inches='tight')
     print("✅ Saved: fig1_ours_vs_sklearn.png")
 
     # ═════════════════════════════════════════════════════════════════════
@@ -164,7 +167,7 @@ def run_visualization():
             )
 
     fig2.tight_layout(rect=[0, 0, 1, 0.95])
-    fig2.savefig("fig2_depth_effect.png", dpi=150, bbox_inches='tight')
+    fig2.savefig("plots/fig2_depth_effect.png", dpi=150, bbox_inches='tight')
     print("✅ Saved: fig2_depth_effect.png")
 
     # ═════════════════════════════════════════════════════════════════════
@@ -215,7 +218,7 @@ def run_visualization():
         axes3[idx].grid(True, alpha=0.3)
 
     fig3.tight_layout()
-    fig3.savefig("fig3_overfitting_curve.png", dpi=150, bbox_inches='tight')
+    fig3.savefig("plots/fig3_overfitting_curve.png", dpi=150, bbox_inches='tight')
     print("✅ Saved: fig3_overfitting_curve.png")
 
     # ═════════════════════════════════════════════════════════════════════
@@ -239,7 +242,7 @@ def run_visualization():
         )
 
     fig4.tight_layout()
-    fig4.savefig("fig4_tree_growth.png", dpi=150, bbox_inches='tight')
+    fig4.savefig("plots/fig4_tree_growth.png", dpi=150, bbox_inches='tight')
     print("✅ Saved: fig4_tree_growth.png")
 
     plt.show()
