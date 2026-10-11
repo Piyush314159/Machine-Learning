@@ -113,6 +113,10 @@ This repository contains my learning materials, implementations, and projects wh
 ## 📂 Repository Structure
 ```
 ML-Journey/
+├── Decission Tree/              ← CART from scratch + visualizations
+│   ├── cart_from_scratch.py
+│   ├── decision_boundary_viz.py
+│   └── plots/
 ├── 1_Supervised_Learning/
 │   ├── classification/
 │   ├── regression/
@@ -170,7 +174,8 @@ ML-Journey/
 
 ## 🚀 Future Plans
 
-- [ ] Decision Trees & Random Forest  
+- [x] Decision Trees (CART from scratch)  
+- [ ] Random Forest  
 - [ ] Support Vector Machines  
 - [ ] Advanced Neural Networks  
 - [ ] Deep Learning Projects  

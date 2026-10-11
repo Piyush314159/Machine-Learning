@@ -8,10 +8,11 @@ Goal: Understand **every moving part** of a Classification And Regression Tree.
 
 Key concepts covered (in order):
   1. Gini Impurity — how we measure "purity" of a node
-  2. Finding the best split — brute-force over every feature × threshold
-  3. Recursive tree building — when to stop, when to split
-  4. Prediction — walking a sample down the tree
-  5. Accuracy check — compare with sklearn's DecisionTreeClassifier
+  2. Threshold selection — why midpoints between sorted unique values
+  3. Finding the best split — naive O(n²) and optimized O(n log n)
+  4. Recursive tree building — when to stop, when to split
+  5. Prediction — walking a sample down the tree
+  6. Accuracy check — compare with sklearn's DecisionTreeClassifier
 
 Run:  python cart_from_scratch.py
 =============================================================================
@@ -59,58 +60,171 @@ def weighted_gini(y_left: np.ndarray, y_right: np.ndarray) -> float:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. FIND THE BEST SPLIT — THE HEART OF CART
+# 3. NUMERIC THRESHOLD SELECTION — WHY MIDPOINTS?
 # ─────────────────────────────────────────────────────────────────────────────
-# For each feature:
-#   - Sort the unique values
-#   - Try every midpoint between consecutive unique values as a threshold
-#   - Compute the weighted Gini for that split
-#   - Keep the (feature, threshold) pair that gives the **lowest** Gini
+# For a numeric feature, you don't try arbitrary thresholds — you only need
+# to try midpoints between consecutive DISTINCT SORTED values.
 #
-# This is O(n × m × log n) per node — brute force but simple & correct.
+# WHY?
+#   The split only changes which points go left/right at the exact points
+#   where you cross from one data value to the next. Any threshold strictly
+#   between two consecutive data points produces the IDENTICAL left/right
+#   partition — so trying more than one point in that gap is redundant.
+#
+#   A threshold placed exactly ON a data point risks ambiguity (is that
+#   point left or right?) — the midpoint avoids that cleanly.
+#
+# EXAMPLE:
+#   If Age has unique sorted values [22, 25, 30, 38, 40]:
+#     Candidate thresholds: (22+25)/2=23.5, (25+30)/2=27.5,
+#                           (30+38)/2=34.0, (38+40)/2=39.0
+#     → 5 unique values, 4 candidate thresholds (n−1 in general)
+#
+#   You'd test Age ≤ 23.5, Age ≤ 27.5, Age ≤ 34.0, Age ≤ 39.0
+#   and keep whichever gives the best Gini gain.
+
+def best_split_numeric(X_col: np.ndarray, y: np.ndarray,
+                       parent_impurity: float, n_samples: int):
+    """
+    Naive O(n²) numeric split: try every midpoint, recompute Gini each time.
+
+    For each midpoint threshold:
+      - Mask the data into left/right (O(n))
+      - Compute Gini from scratch (O(n))
+    → n thresholds × O(n) work each = O(n²) per feature.
+
+    Simple and correct — use this first to understand, optimize later.
+    """
+    best_gain, best_threshold = -1, None
+    sorted_vals = np.unique(X_col)  # distinct sorted values
+
+    for i in range(len(sorted_vals) - 1):
+        threshold = (sorted_vals[i] + sorted_vals[i + 1]) / 2  # midpoint
+        left_mask = X_col <= threshold
+        right_mask = ~left_mask
+
+        y_left, y_right = y[left_mask], y[right_mask]
+        w_impurity = (len(y_left) / n_samples) * gini_impurity(y_left) + \
+                     (len(y_right) / n_samples) * gini_impurity(y_right)
+        gain = parent_impurity - w_impurity
+
+        if gain > best_gain:
+            best_gain, best_threshold = gain, threshold
+
+    return best_threshold, best_gain
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3b. OPTIMIZED NUMERIC SPLIT — O(n log n) via Sliding Window
+# ─────────────────────────────────────────────────────────────────────────────
+# The naive version recomputes class counts from scratch for every threshold.
+# Instead, we can:
+#   1. Sort samples by feature value once               → O(n log n)
+#   2. Maintain running class counts for left and right
+#   3. Slide threshold left-to-right: move one sample   → O(1) count update
+#      from right to left, update counts, compute Gini
+#   4. Compute Gini from counts in O(k)                 → k = number of classes
+#
+# Total: O(n log n) sort + O(n × k) sweep ≈ O(n log n) since k ≪ n.
+
+def best_split_numeric_optimized(X_col: np.ndarray, y: np.ndarray,
+                                 parent_impurity: float, n_samples: int,
+                                 n_classes: int):
+    """
+    O(n log n) numeric split using incremental class count updates.
+
+    Instead of masking + recomputing Gini each time, sort once and slide:
+      - All samples start on the right side
+      - Move one sample at a time from right → left
+      - Update running counts in O(1), compute Gini from counts in O(k)
+    """
+    best_gain, best_threshold = -1.0, None
+
+    # Sort by feature value
+    sorted_indices = np.argsort(X_col)
+    sorted_vals = X_col[sorted_indices]
+    sorted_labels = y[sorted_indices]
+
+    # Initialize: all samples on the right
+    left_counts = np.zeros(n_classes, dtype=int)
+    right_counts = np.bincount(y, minlength=n_classes).copy()
+    n_left, n_right = 0, n_samples
+
+    for i in range(n_samples - 1):
+        # Move sample i from right → left
+        c = sorted_labels[i]
+        left_counts[c] += 1
+        right_counts[c] -= 1
+        n_left += 1
+        n_right -= 1
+
+        # Skip if next sample has the same value (no new threshold possible)
+        if sorted_vals[i] == sorted_vals[i + 1]:
+            continue
+
+        # Threshold = midpoint between current and next distinct value
+        threshold = (sorted_vals[i] + sorted_vals[i + 1]) / 2.0
+
+        # Compute Gini from counts — O(k) instead of O(n)
+        left_probs = left_counts / n_left
+        right_probs = right_counts / n_right
+        gini_left = 1.0 - np.sum(left_probs ** 2)
+        gini_right = 1.0 - np.sum(right_probs ** 2)
+
+        w_impurity = (n_left / n_samples) * gini_left + \
+                     (n_right / n_samples) * gini_right
+        gain = parent_impurity - w_impurity
+
+        if gain > best_gain:
+            best_gain, best_threshold = gain, threshold
+
+    return best_threshold, best_gain
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. FIND THE BEST SPLIT — ACROSS ALL FEATURES
+# ─────────────────────────────────────────────────────────────────────────────
+# This is the outer loop: for each feature, find its best threshold (using
+# the optimized numeric split), then pick the feature with the highest gain.
+#
+# If you had categorical features, you'd also call a best_split_categorical()
+# here and compare its gain against the numeric features' gains — the overall
+# winner (numeric or categorical, whichever has the highest gain) becomes
+# the node's split.
 
 def find_best_split(X: np.ndarray, y: np.ndarray):
     """
-    Returns (best_feature_index, best_threshold, best_gini).
+    Returns (best_feature_index, best_threshold, best_gain).
     Returns (None, None, None) if no valid split exists.
+
+    Uses the O(n log n) optimized split per feature.
     """
     n_samples, n_features = X.shape
-    best_gini = float('inf')
+    n_classes = int(y.max()) + 1  # use max label, not count of unique labels
+    parent_impurity = gini_impurity(y)
+
+    best_gain = -1.0
     best_feature = None
     best_threshold = None
 
     for feature_idx in range(n_features):
-        # Get sorted unique values for this feature
-        values = np.sort(np.unique(X[:, feature_idx]))
+        threshold, gain = best_split_numeric_optimized(
+            X[:, feature_idx], y, parent_impurity, n_samples, n_classes
+        )
 
-        # Try midpoints between consecutive unique values
-        # (more robust than trying every raw value)
-        for i in range(len(values) - 1):
-            threshold = (values[i] + values[i + 1]) / 2.0
+        if threshold is not None and gain > best_gain:
+            best_gain = gain
+            best_feature = feature_idx
+            best_threshold = threshold
 
-            # Split: left = samples where feature <= threshold
-            left_mask = X[:, feature_idx] <= threshold
-            right_mask = ~left_mask
+    if best_feature is None:
+        return None, None, None
 
-            y_left = y[left_mask]
-            y_right = y[right_mask]
-
-            # Skip if split produces an empty child
-            if len(y_left) == 0 or len(y_right) == 0:
-                continue
-
-            gini = weighted_gini(y_left, y_right)
-
-            if gini < best_gini:
-                best_gini = gini
-                best_feature = feature_idx
-                best_threshold = threshold
-
-    return best_feature, best_threshold, best_gini
+    return best_feature, best_threshold, best_gain
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. THE TREE NODE
+# 5. THE TREE NODE
 # ─────────────────────────────────────────────────────────────────────────────
 # Each node is either:
 #   - A LEAF: stores the predicted class (majority vote)
@@ -138,7 +252,7 @@ class Node:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. DECISION TREE CLASSIFIER (CART)
+# 6. DECISION TREE CLASSIFIER (CART)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DecisionTreeCART:
@@ -196,7 +310,7 @@ class DecisionTreeCART:
             return node
 
         # ── TRY TO SPLIT ─────────────────────────────────────────────────
-        best_feat, best_thresh, best_gini = find_best_split(X, y)
+        best_feat, best_thresh, best_gain = find_best_split(X, y)
 
         # No valid split found
         if best_feat is None:
